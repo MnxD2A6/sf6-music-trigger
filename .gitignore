@@ -1,0 +1,32 @@
+# Local runtime data
+music/
+*.mp3
+*.wav
+*.flac
+diagnostic_captures/
+logs/
+screenshots/
+app_config.json
+input_config.json
+profiles/
+models/
+user_config.json
+
+# Python tooling
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Large OpenCV regression fixtures (kept on disk, not in git)
+tests/fixtures/*.npz
+
+# Downloaded reference material
+_refs/
+
+# Bundled third-party binaries (REFramework), staged locally for builds
+third_party/

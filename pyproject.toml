@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sf6-music-trigger"
+version = "2.0.0b1"
+description = "Local music triggers for Street Fighter 6 supers (REFramework or screen detection)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+dependencies = [
+  "numpy>=1.26,<3",
+  "opencv-python>=4.9,<5",
+  "dxcam[winrt]>=0.3,<0.4",
+  "pygame>=2.5,<3",
+]
+
+[project.scripts]
+sf6-music-trigger = "sf6_music_trigger.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "lupa>=2.4,<3",
+  "pytest-cov>=5,<6",
+  "setuptools>=75",
+  "wheel>=0.45,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sf6_music_trigger = ["game_scripts/*.lua"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"
