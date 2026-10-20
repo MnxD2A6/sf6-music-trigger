@@ -240,3 +240,14 @@ def test_first_result_wins_over_a_different_final_result():
     clock.now += 6
     feed(engine, clock)
     assert port.calls == [PLAY_P1] and engine.outcome_statuses[0] == "命中"
+
+
+def test_reset_result_fades_without_whiff_sound_in_any_scope():
+    from sf6_music_trigger.reframework_events import SuperResult
+
+    for scope in (SuperScope.ALL_SUPERS, SuperScope.SA3_CA_ONLY):
+        engine, port, clock, _ = make(p1=side_config(scope, whiff_sound=True))
+        feed(engine, clock, SuperStart(P1, 3, 1, None, None))
+        clock.now += 0.7
+        feed(engine, clock, SuperResult(P1, 3, 1, "unknown", "reset"))
+        assert port.calls == [PLAY_P1, FADE_P1]

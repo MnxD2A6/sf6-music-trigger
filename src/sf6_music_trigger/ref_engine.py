@@ -205,6 +205,15 @@ class RefTriggerEngine:
         if event.result == "hit":
             self._held_fade = None
             return
+        if event.result == "unknown" and event.reason == "reset":
+            # Training reset / round reset / leaving the battle: quietly fade,
+            # never the whiff sound.
+            self._execute(
+                (AudioAction(AudioKind.FADE, event.side, fade_ms=config.whiff_fade_ms),),
+                new_owner=owner,
+            )
+            self._status[event.side] = "淡出中"
+            return
         if event.result == "unknown" and config.super_scope is SuperScope.ALL_SUPERS:
             return
         if config.play_whiff_sound and config.whiff_track:

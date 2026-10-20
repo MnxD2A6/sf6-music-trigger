@@ -19,7 +19,7 @@
 --               result: hit | block | whiff | unknown (final evidence)
 -- Every line also carries v (protocol), session, seq and t (os.clock seconds).
 
-local SCRIPT_VERSION = "v2-detector-0.4"
+local SCRIPT_VERSION = "v2-detector-0.5"
 local PROTOCOL = 1
 local DATA_DIR = "SF6MusicTrigger"
 local EVENTS_PATH = DATA_DIR .. "/events.jsonl"
@@ -347,7 +347,14 @@ local function observe_own(i, s, act, now)
     if own_class == "damage" or own_class == "down" then
         end_episode(i, s, now, "interrupted")
     elseif not in_super_block(s, act) then
-        end_episode(i, s, now, "recovered")
+        -- Left the super before its own attack frames were over: not a real
+        -- recovery (training-mode position reset, round reset), so not a whiff.
+        local w = s.windows and s.windows[ep.act]
+        if not ep.decided and w and w.last and not w.projectile and (ep.start_frame_max or -1) < w.last then
+            end_episode(i, s, now, "reset")
+        else
+            end_episode(i, s, now, "recovered")
+        end
     end
 end
 
@@ -486,6 +493,10 @@ local function sample(now)
         local s = sides[i]
         s.prev_act, s.prev_frame = s.act, s.frame
         s.frame = frames[i]
+        local ep = s.episode
+        if ep and s.act == ep.act and s.frame and s.frame > (ep.start_frame_max or -1) then
+            ep.start_frame_max = s.frame
+        end
         if acts[i] ~= nil and acts[i] ~= s.act then
             s.act = acts[i]
             s.act_since = now

@@ -34,7 +34,7 @@ V2_HIDDEN_IMPORTS = (
     "sf6_music_trigger.ref_engine",
     "sf6_music_trigger.reframework_events",
 )
-RELEASE_VERSION = "2.0.0b1"
+RELEASE_VERSION = "2.0.0b2"
 
 
 class ReleaseValidationError(ValueError):

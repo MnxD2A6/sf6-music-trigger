@@ -154,3 +154,21 @@ def test_loading_errors_are_rate_limited():
     errors = [e for e in g.lines(EVENTS) if e["type"] == "error"]
     assert 2 <= len(errors) <= 4
     assert errors[1]["suppressed"] > 200
+
+
+def test_training_reset_during_super_startup_is_not_a_whiff(game):
+    start_super(game, 1, 1210)
+    game.frames(40)                 # super flash / startup, attack frames not reached
+    game.set_act(1, BAS)            # training mode position reset
+    game.set_act(2, BAS)
+    game.frames(30)
+    results = events(game, "super_result")
+    assert [(e["result"], e["reason"]) for e in results] == [("unknown", "reset")]
+
+
+def test_real_whiff_after_attack_frames_is_still_a_whiff(game):
+    start_super(game, 1, 1210)
+    game.frames(130)
+    game.set_act(1, BAS)
+    game.frames(5)
+    assert events(game, "super_result")[0]["result"] == "whiff"
