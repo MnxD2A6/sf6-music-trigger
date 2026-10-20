@@ -102,6 +102,7 @@ class RefTriggerEngine:
         for config in self._configs.values():
             if config.enabled:
                 tracks.append((config.main_track, config.volume))
+                tracks.extend((track, config.volume) for track in config.level_tracks() if track)
                 if config.play_whiff_sound:
                     tracks.append((config.whiff_track, config.whiff_volume))
         try:
@@ -158,11 +159,15 @@ class RefTriggerEngine:
         if config.super_scope is SuperScope.SA3_CA_ONLY and event.level in (1, 2):
             self._status[event.side] = "低等级已过滤"
             return
+        track = config.track_for_level(event.level)
+        if not track:
+            self._status[event.side] = None
+            return
         owner = _Owner(event.side, event.episode)
         played = self._execute(
             (
                 AudioAction(AudioKind.STOP, event.side),
-                AudioAction(AudioKind.PLAY, event.side, config.main_track, config.volume),
+                AudioAction(AudioKind.PLAY, event.side, track, config.volume),
             ),
             new_owner=owner,
         )

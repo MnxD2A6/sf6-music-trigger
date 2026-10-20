@@ -26,6 +26,7 @@ from .audio_templates import (
     save_audio_templates,
 )
 from .config import (
+    LEVEL_TRACK_FIELDS,
     MAX_VOLUME,
     AppConfig,
     DetectionBackend,
@@ -350,6 +351,10 @@ class PanelViewModel:
         self.p2_volume_percent: Real = 18
         self.p1_whiff_track = ""
         self.p2_whiff_track = ""
+        # Optional music per super level; empty means "use the main track".
+        for side_name in ("p1", "p2"):
+            for level_field in LEVEL_TRACK_FIELDS.values():
+                setattr(self, f"{side_name}_{level_field}", "")
         self.p1_whiff_volume_percent: Real = 18
         self.p2_whiff_volume_percent: Real = 18
         self.p1_play_whiff_sound = False
@@ -439,6 +444,9 @@ class PanelViewModel:
     def audio_template_path(self) -> Path:
         return self.user_dir / "audio_templates.json"
 
+    def _level_tracks(self, side_name: str) -> dict[str, str]:
+        return {name: getattr(self, f"{side_name}_{name}") for name in LEVEL_TRACK_FIELDS.values()}
+
     def _current_audio_template(self) -> AudioTemplate:
         return AudioTemplate(
             p1=AudioTemplateSide(
@@ -447,6 +455,7 @@ class PanelViewModel:
                 _require_percent(self.p1_volume_percent),
                 self.p1_whiff_track,
                 _require_percent(self.p1_whiff_volume_percent),
+                **self._level_tracks("p1"),
             ),
             p2=AudioTemplateSide(
                 self.p2_enabled,
@@ -454,6 +463,7 @@ class PanelViewModel:
                 _require_percent(self.p2_volume_percent),
                 self.p2_whiff_track,
                 _require_percent(self.p2_whiff_volume_percent),
+                **self._level_tracks("p2"),
             ),
         )
 
@@ -523,6 +533,9 @@ class PanelViewModel:
         self.p2_whiff_track = template.p2.whiff_track
         self.p1_whiff_volume_percent = round(template.p1.whiff_volume * 100, 10)
         self.p2_whiff_volume_percent = round(template.p2.whiff_volume * 100, 10)
+        for side_name, side_template in (("p1", template.p1), ("p2", template.p2)):
+            for name in LEVEL_TRACK_FIELDS.values():
+                setattr(self, f"{side_name}_{name}", getattr(side_template, name))
         self.validation_message = f"{name} 已应用"
         return True
 
@@ -530,7 +543,20 @@ class PanelViewModel:
         enabled_tracks = (
             (self.p1_enabled, self.p1_main_track),
             (self.p2_enabled, self.p2_main_track),
+            *(
+                (getattr(self, f"{side_name}_enabled"), track)
+                for side_name in ("p1", "p2")
+                for track in self._level_tracks(side_name).values()
+            ),
         )
+        for side_name in ("p1", "p2"):
+            if not getattr(self, f"{side_name}_enabled"):
+                continue
+            for name, track in self._level_tracks(side_name).items():
+                if track and not _track_exists(self.user_dir, track):
+                    label = {"sa1_track": "SA1", "sa2_track": "SA2", "sa3_track": "SA3", "ca_track": "CA"}[name]
+                    self.validation_message = f"{side_name.upper()} 的 {label} 音乐文件不存在，请重新选择或清除"
+                    return False
         if not any(enabled and _track_exists(self.user_dir, track) for enabled, track in enabled_tracks):
             self.validation_message = "请选择有效音频文件 闊抽"
             return False
@@ -627,6 +653,22 @@ class PanelViewModel:
             return False
         return True
 
+    def preview_level(self, side: Side, level: int) -> bool:
+        """Preview the music a super level would play (its own track or the main one)."""
+
+        if not isinstance(side, Side):
+            raise TypeError("side must be Side")
+        if self.audio_port is None or not callable(getattr(self.audio_port, "preview", None)):
+            raise RuntimeError("audio preview is unavailable")
+        side_name = side.value.lower()
+        track = getattr(self, f"{side_name}_{LEVEL_TRACK_FIELDS[level]}") or getattr(self, f"{side_name}_main_track")
+        try:
+            self.audio_port.preview(track, _require_percent(getattr(self, f"{side_name}_volume_percent")))
+        except AudioPlaybackError as error:
+            self._status_sink(error)
+            return False
+        return True
+
     def preview_whiff(self, side: Side) -> bool:
         if not isinstance(side, Side):
             raise TypeError("side must be Side")
@@ -657,6 +699,7 @@ class PanelViewModel:
                 self.p1_whiff_fade_ms,
                 self.p1_super_scope,
                 self.p1_fade_non_three,
+                **self._level_tracks("p1"),
             ),
             p2=SideAudioConfig(
                 self.p2_enabled,
@@ -668,6 +711,7 @@ class PanelViewModel:
                 self.p2_whiff_fade_ms,
                 self.p2_super_scope,
                 self.p2_fade_non_three,
+                **self._level_tracks("p2"),
             ),
             profile_path=self.profile_path,
             capture_fps=self.capture_fps,
@@ -791,6 +835,9 @@ def create_panel_application(
     view_model.p2_super_scope = config.p2.super_scope
     view_model.p1_fade_non_three = config.p1.fade_non_three
     view_model.p2_fade_non_three = config.p2.fade_non_three
+    for side_name, side_config in (("p1", config.p1), ("p2", config.p2)):
+        for name in LEVEL_TRACK_FIELDS.values():
+            setattr(view_model, f"{side_name}_{name}", getattr(side_config, name))
     view_model.capture_fps = config.capture_fps
     view_model.detection_backend = config.detection_backend
     view_model.game_dir = config.game_dir
@@ -1732,7 +1779,7 @@ def run_panel(config_path: str | Path) -> None:
     root = tk.Tk()
     from . import BUILD_ID
     root.title(f"SF6 Music Trigger — {BUILD_ID}")
-    root.minsize(760, 560)
+    root.minsize(780, 700)
 
     if not view_model.game_dir:
         try:
@@ -1773,12 +1820,18 @@ def run_panel(config_path: str | Path) -> None:
                 value=float(getattr(view_model, side_attr(side, "whiff_volume_percent")))
             ),
         }
+        for level_field in LEVEL_TRACK_FIELDS.values():
+            side_vars[side][level_field] = tk.StringVar(value=getattr(view_model, side_attr(side, level_field)))
+            side_vars[side][f"{level_field}_name"] = tk.StringVar()
     volume_scales: list[object] = []
 
     def refresh_names() -> None:
         for vars_ in side_vars.values():
             vars_["track_name"].set(audio_track_display_name(vars_["track"].get()))
             vars_["whiff_name"].set(audio_track_display_name(vars_["whiff_track"].get()))
+            for level_field in LEVEL_TRACK_FIELDS.values():
+                own = vars_[level_field].get()
+                vars_[f"{level_field}_name"].set(audio_track_display_name(own) if own else "（用主音乐）")
 
     def volume_limit() -> int:
         return MAX_VOLUME_PERCENT if unlimited_var.get() else NORMAL_VOLUME_PERCENT
@@ -1797,6 +1850,8 @@ def run_panel(config_path: str | Path) -> None:
             setattr(view_model, side_attr(side, "whiff_volume_percent"), vars_["whiff_volume"].get())
             setattr(view_model, side_attr(side, "super_scope"), _SUPER_SCOPE_FROM_LABEL[vars_["scope"].get()])
             view_model.set_whiff_sound_mode(side, vars_["whiff_mode"].get() == "sound")
+            for level_field in LEVEL_TRACK_FIELDS.values():
+                setattr(view_model, side_attr(side, level_field), vars_[level_field].get())
 
     def refresh_vars_from_view_model() -> None:
         unlimited_var.set(view_model.volume_unlimited)
@@ -1809,6 +1864,8 @@ def run_panel(config_path: str | Path) -> None:
             vars_["whiff_mode"].set("sound" if getattr(view_model, side_attr(side, "play_whiff_sound")) else "fade")
             vars_["whiff_track"].set(getattr(view_model, side_attr(side, "whiff_track")))
             vars_["whiff_volume"].set(float(getattr(view_model, side_attr(side, "whiff_volume_percent"))))
+            for level_field in LEVEL_TRACK_FIELDS.values():
+                vars_[level_field].set(getattr(view_model, side_attr(side, level_field)))
         refresh_names()
 
     def apply_volume_limit() -> None:
@@ -2137,6 +2194,36 @@ def run_panel(config_path: str | Path) -> None:
         )
         audio_row(6, "打空音效", "whiff_track", "whiff_name", True)
         volume_row(7, "音效音量", "whiff_volume")
+
+        levels = ttk.LabelFrame(box, text="分招式音乐（不选则用主音乐）", padding=(6, 2))
+        levels.grid(row=8, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        levels.columnconfigure(1, weight=1)
+
+        def level_row(row: int, level: int, field: str, label: str) -> None:
+            ttk.Label(levels, text=label, width=4).grid(row=row, column=0, sticky="w")
+            ttk.Entry(levels, textvariable=vars_[f"{field}_name"], state="readonly").grid(
+                row=row, column=1, sticky="ew", padx=4, pady=1
+            )
+
+            def choose() -> None:
+                choose_audio(vars_[field], vars_[f"{field}_name"])
+
+            def clear() -> None:
+                vars_[field].set("")
+                vars_[f"{field}_name"].set("（用主音乐）")
+
+            def listen() -> None:
+                sync_view_model()
+                if view_model.preview_level(side, level):
+                    status_var.set(f"{side.value} {label} 音乐试听")
+                flush_audio_errors()
+
+            ttk.Button(levels, text="选择", width=5, command=choose).grid(row=row, column=2)
+            ttk.Button(levels, text="清除", width=5, command=clear).grid(row=row, column=3, padx=(3, 0))
+            ttk.Button(levels, text="试听", width=5, command=listen).grid(row=row, column=4, padx=(3, 0))
+
+        for row, (level, field) in enumerate(LEVEL_TRACK_FIELDS.items()):
+            level_row(row, level, field, {1: "SA1", 2: "SA2", 3: "SA3", 4: "CA"}[level])
 
     build_side(0, Side.P1)
     build_side(1, Side.P2)

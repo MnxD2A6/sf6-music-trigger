@@ -167,3 +167,18 @@ def test_widget_errors_keep_imgui_balanced(game):
     game.frames(3)
     assert ui(game).windows == 0 and ui(game).ids == 0
     assert "boom" in ui(game).error
+
+
+def test_level_track_choice_can_go_back_to_main_music(game):
+    state = app_state()
+    state["sides"]["p1"]["ca_track"] = "b.mp3"
+    game.set_saved_json(STATE, state)
+    game.load()
+    game.frames(1)
+    assert "combo:p1/CA 音乐" in drawn(game)
+    ui(game).inputs["p1/CA 音乐"] = 1          # option 1 = （用主音乐）
+    ui(game).inputs["p1/SA1 音乐"] = 4         # options: （用主音乐）, a.mp3, b.mp3, w.wav
+    game.frames(2)
+    sent = commands(game)
+    assert {"cmd": "set", "side": "p1", "key": "ca_track", "value": ""} in sent
+    assert {"cmd": "set", "side": "p1", "key": "sa1_track", "value": "w.wav"} in sent

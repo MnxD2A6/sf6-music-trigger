@@ -34,7 +34,7 @@ V2_HIDDEN_IMPORTS = (
     "sf6_music_trigger.ref_engine",
     "sf6_music_trigger.reframework_events",
 )
-RELEASE_VERSION = "2.0.0b2"
+RELEASE_VERSION = "2.0.0b3"
 
 
 class ReleaseValidationError(ValueError):
@@ -125,6 +125,10 @@ def group_test_readme() -> str:
 - 键盘没有 Insert 键：REFramework 菜单在游戏启动时会自动弹出，
   在 REFramework Config 里把 Menu Key 换成其他键（例如 F7）。
 - 窗口显示“未连接 V2 播放器”时，说明 V2 没有在运行。
+
+分招式音乐
+- 面板里每一侧都有“分招式音乐”，可以给 SA1 / SA2 / SA3 / CA 各选一首；
+  不选的那一招用这一侧的主音乐。游戏内设置窗口里也能选。
 
 音量
 - 100% 是音乐文件本身的音量。

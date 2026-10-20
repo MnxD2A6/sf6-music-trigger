@@ -9,7 +9,7 @@
 --     {v=1, type="ui", session, seq, t, cmd, side?, key?, value?}
 --     cmd: set | set_option | reset_volume | apply_template | start | stop | preview
 
-local UI_VERSION = "v2-ui-0.1"
+local UI_VERSION = "v2-ui-0.2"
 local DATA_DIR = "SF6MusicTrigger"
 local STATE_PATH = DATA_DIR .. "/app_state.json"
 local COMMANDS_PATH = DATA_DIR .. "/ui_commands.jsonl"
@@ -31,6 +31,8 @@ local WHIFF_MODES = {
     { "fade", "淡出主音乐" },
 }
 local SIDES = { { "p1", "P1" }, { "p2", "P2" } }
+local LEVEL_TRACKS = { { "sa1_track", "SA1 音乐" }, { "sa2_track", "SA2 音乐" },
+                       { "sa3_track", "SA3 音乐" }, { "ca_track", "CA 音乐" } }
 
 local ui = { show_window = true }
 do
@@ -111,8 +113,8 @@ local function choice(label, current, options)
     return false, current
 end
 
-local function track_choice(label, current)
-    local options = { { "", "（未选择）" } }
+local function track_choice(label, current, empty_label)
+    local options = { { "", empty_label or "（未选择）" } }
     for _, name in ipairs(state.tracks or {}) do options[#options + 1] = { name, name } end
     return choice(label, current or "", options)
 end
@@ -127,6 +129,12 @@ local function draw_side_body(side, title)
     if changed and value ~= "" then set_side(side, "main_track", value) end
     imgui.same_line()
     if imgui.button("试听##main") then send({ cmd = "preview", side = side, value = "main" }) end
+
+    -- Optional music per super level; "use main track" clears the override.
+    for _, level in ipairs(LEVEL_TRACKS) do
+        changed, value = track_choice(level[2], side_value(side, level[1]), "（用主音乐）")
+        if changed then set_side(side, level[1], value) end
+    end
 
     local max = state.volume_max or 100
     changed, value = imgui.slider_int("音量", math.floor(side_value(side, "volume") or 0), 0, max, "%d%%")

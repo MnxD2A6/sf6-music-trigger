@@ -33,7 +33,13 @@ _SIDE_KEYS = {
     "whiff_fade_ms",
     "super_scope",
     "fade_non_three",
+    "sa1_track",
+    "sa2_track",
+    "sa3_track",
+    "ca_track",
 }
+# Optional music per super level (REFramework backend). Empty = main_track.
+LEVEL_TRACK_FIELDS = {1: "sa1_track", 2: "sa2_track", 3: "sa3_track", 4: "ca_track"}
 _DEVICE_PREFIXES = ("\\\\?\\", "\\\\.\\")
 # Volumes are gains: 1.0 is the track's own loudness. Above 1.0 the audio
 # port amplifies the samples (with a soft limiter), up to 500 %.
@@ -160,6 +166,20 @@ class SideAudioConfig:
     whiff_fade_ms: int = 1500
     super_scope: SuperScope = SuperScope.SA3_CA_ONLY
     fade_non_three: bool = False
+    sa1_track: str = ""
+    sa2_track: str = ""
+    sa3_track: str = ""
+    ca_track: str = ""
+
+    def track_for_level(self, level: int) -> str:
+        """Music for a super level (1-4): its own track, else the main track."""
+
+        field_name = LEVEL_TRACK_FIELDS.get(level)
+        own = getattr(self, field_name) if field_name else ""
+        return own or self.main_track
+
+    def level_tracks(self) -> tuple[str, ...]:
+        return tuple(getattr(self, name) for name in LEVEL_TRACK_FIELDS.values())
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:
@@ -175,6 +195,8 @@ class SideAudioConfig:
             raise TypeError("super_scope must be SuperScope")
         _validate_audio_path(self.main_track)
         _validate_audio_path(self.whiff_track, name="whiff_track")
+        for name in LEVEL_TRACK_FIELDS.values():
+            _validate_audio_path(getattr(self, name), name=name)
         object.__setattr__(self, "volume", _validate_volume(self.volume))
         object.__setattr__(self, "whiff_volume", _validate_volume(self.whiff_volume))
 
@@ -284,6 +306,8 @@ def _validate_config_for_root(config: object, root: Path) -> AppConfig:
             raise TypeError(f"{side_name}.super_scope must be SuperScope")
         _validate_audio_path(side.main_track, root)
         _validate_audio_path(side.whiff_track, root, "whiff_track")
+        for name in LEVEL_TRACK_FIELDS.values():
+            _validate_audio_path(getattr(side, name), root, name)
         _validate_volume(side.volume)
         _validate_volume(side.whiff_volume)
     return config

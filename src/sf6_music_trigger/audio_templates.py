@@ -9,13 +9,14 @@ from pathlib import Path
 import tempfile
 from typing import Mapping
 
-from .config import SideAudioConfig
+from .config import LEVEL_TRACK_FIELDS, SideAudioConfig
 
 
 DEFAULT_AUDIO_TEMPLATE_NAMES = ("模板 1", "模板 2")
 _ROOT_KEYS = {"schema_version", "templates"}
 _TEMPLATE_KEYS = {"p1", "p2"}
 _SIDE_KEYS = {"enabled", "main_track", "volume", "whiff_track", "whiff_volume"}
+_OPTIONAL_SIDE_KEYS = set(LEVEL_TRACK_FIELDS.values())  # added in V2 2.0.0b3
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,10 @@ class AudioTemplateSide:
     volume: float = 0.18
     whiff_track: str = ""
     whiff_volume: float = 0.18
+    sa1_track: str = ""
+    sa2_track: str = ""
+    sa3_track: str = ""
+    ca_track: str = ""
 
     def __post_init__(self) -> None:
         validated = SideAudioConfig(
@@ -33,6 +38,10 @@ class AudioTemplateSide:
             volume=self.volume,
             whiff_track=self.whiff_track,
             whiff_volume=self.whiff_volume,
+            sa1_track=self.sa1_track,
+            sa2_track=self.sa2_track,
+            sa3_track=self.sa3_track,
+            ca_track=self.ca_track,
         )
         object.__setattr__(self, "volume", validated.volume)
         object.__setattr__(self, "whiff_volume", validated.whiff_volume)
@@ -63,8 +72,12 @@ def _require_exact_keys(value: object, keys: set[str], label: str) -> dict[str, 
 
 
 def _parse_side(value: object, label: str) -> AudioTemplateSide:
-    payload = _require_exact_keys(value, _SIDE_KEYS, label)
-    return AudioTemplateSide(**payload)
+    if not isinstance(value, dict):
+        raise TypeError(f"{label} must be an object")
+    keys = set(value)
+    if not _SIDE_KEYS <= keys or not keys <= _SIDE_KEYS | _OPTIONAL_SIDE_KEYS:
+        raise ValueError(f"{label} has invalid fields")
+    return AudioTemplateSide(**value)
 
 
 def _validated_templates(

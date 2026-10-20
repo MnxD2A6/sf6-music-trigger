@@ -21,7 +21,7 @@ from pathlib import Path, PureWindowsPath
 import time
 from typing import Callable
 
-from .config import SuperScope
+from .config import LEVEL_TRACK_FIELDS, SuperScope
 from .domain import Side
 from .reframework_events import EventFileTail
 
@@ -36,7 +36,8 @@ UNLIMITED_VOLUME_PERCENT = 500
 
 _SIDE_NAMES = {"p1": Side.P1, "p2": Side.P2}
 _SCOPES = {"ALL_SUPERS": SuperScope.ALL_SUPERS, "SA3_CA_ONLY": SuperScope.SA3_CA_ONLY}
-_SIDE_KEYS = {"enabled", "volume", "whiff_volume", "scope", "whiff_mode", "main_track", "whiff_track"}
+_LEVEL_KEYS = set(LEVEL_TRACK_FIELDS.values())
+_SIDE_KEYS = {"enabled", "volume", "whiff_volume", "scope", "whiff_mode", "main_track", "whiff_track", *_LEVEL_KEYS}
 _COMMANDS = {"set", "set_option", "reset_volume", "apply_template", "start", "stop", "preview"}
 
 
@@ -73,7 +74,7 @@ def parse_ui_command(record: object) -> UiCommand:
             raise ValueError("invalid scope")
         if key == "whiff_mode" and value not in {"sound", "fade"}:
             raise ValueError("invalid whiff mode")
-        if key in {"main_track", "whiff_track"} and type(value) is not str:
+        if key in {"main_track", "whiff_track", *_LEVEL_KEYS} and type(value) is not str:
             raise ValueError("track must be a name")
     elif cmd == "set_option":
         if key not in {"volume_unlimited"} or type(value) is not bool:
@@ -118,6 +119,7 @@ def collect_tracks(view_model: object) -> dict[str, str]:
     stored = [
         view_model.p1_main_track, view_model.p2_main_track,
         view_model.p1_whiff_track, view_model.p2_whiff_track,
+        *(getattr(view_model, f"{side}_{name}") for side in ("p1", "p2") for name in LEVEL_TRACK_FIELDS.values()),
     ]
     folders: list[Path] = []
     for value in stored:
@@ -182,6 +184,10 @@ def build_app_state(
             "whiff_mode": "sound" if getattr(view_model, f"{prefix}_play_whiff_sound") else "fade",
             "whiff_track": _display_name(tracks, getattr(view_model, f"{prefix}_whiff_track")),
             "whiff_volume": round(float(getattr(view_model, f"{prefix}_whiff_volume_percent"))),
+            **{
+                field: _display_name(tracks, getattr(view_model, f"{prefix}_{field}"))
+                for field in LEVEL_TRACK_FIELDS.values()
+            },
         }
     return {
         "v": PROTOCOL_VERSION,
@@ -219,6 +225,8 @@ def apply_ui_command(view_model: object, command: UiCommand, tracks: dict[str, s
             setattr(view_model, f"{prefix}_super_scope", _SCOPES[value])
         elif key == "whiff_mode":
             view_model.set_whiff_sound_mode(command.side, value == "sound")
+        elif key in _LEVEL_KEYS and value == "":
+            setattr(view_model, f"{prefix}_{key}", "")   # back to the main track
         else:
             stored = tracks.get(value)
             if stored is None:
